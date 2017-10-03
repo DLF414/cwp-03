@@ -1,42 +1,45 @@
-// client.js
+// client-files.js
 const net = require('net');
 const fs = require('fs');
 
 const OkServerStatus = 'ACK';
 const ErrServerStatus = 'DEC';
-const OkClientStatus = 'QA';
+const OkClientStatus = 'FILES';
 
-const connectionAddressObj = {host: "127.0.0.1", port: 8124};
-const qaPath = "./qa.json";
+const connectionAddressObj = {host: "127.0.0.1", port: 3001};
 
 const client = new net.Socket();
 
-let questions = [];
-
-let currentQuestionIndex = 0;
-
 client.setEncoding('utf8');
 
-client.connect(connectionAddressObj, function () {
-
-    fs.readFile(qaPath, function (err, data) {
-        if (err) {
-            console.log(err);
-        }
-        else {
-            questions = JSON.parse(data);
-            shuffleQuestion();
-            client.write(OkClientStatus);
-        }
-    });
-
+client.connect(connectionAddressObj, function (err) {
+    if (err)
+    {
+        console.error(err);
+    }
+    else
+    {
+        client.write(OkClientStatus);
+    }
 });
 
 
 client.on('data', function (data) {
     if (data === OkServerStatus) {
-        client.write(questions[currentQuestionIndex].question);
+        console.log(OkServerStatus);
+        fs.open('D:\kok.docx','r',function(status,fc){
+            if(status){
+                console.log(status);
+            }
+            else{
+                console.log('+2');
 
+                let buffer = new Buffer(1000);
+                fs.read(fd,buffer,0,1000,0,function(err,num){
+                    client.write(buffer);
+                })
+            }
+        })
     }
     else if (data === ErrServerStatus) {
         console.log(data);
@@ -57,19 +60,3 @@ client.on('data', function (data) {
         }
     }
 });
-
-
-function shuffleQuestion() {
-    let counter = questions.length;
-    while (counter > 0) {
-        let index = Math.floor(Math.random() * counter);
-
-        counter--;
-
-        let temp = questions[counter];
-        questions[counter] = questions[index];
-        questions[index] = temp;
-    }
-}
-
-

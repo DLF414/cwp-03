@@ -1,9 +1,11 @@
 // server.js
 const net = require('net');
 const fs = require('fs');
-const port = 8124;
+const port = 3001;
 
-const clientReqString = 'QA';
+const ClientQA = 'QA';
+const ClientFILES = 'FILES';
+
 const serverResStringOK = 'ACK';
 const serverResStringErr = 'DEC';
 
@@ -13,6 +15,7 @@ const clientLogPathDefault = './logs';
 let questions = [];
 let seed = 0;
 let fdFile;
+let Clients = [];
 
 const server = net.createServer(function (client) {
 
@@ -23,43 +26,57 @@ const server = net.createServer(function (client) {
     });
 
     client.on('data', createUserDialog);
-    client.on('data', startUserDialog);
+    client.on('data', ClientDialogQA);
+    client.on('data', ClientDialogFILES);
+
 
     function createUserDialog(data, err) {
         if (!err) {
-            if (data === clientReqString) {
+            if (client.id === undefined && (data === ClientQA || ClientFILES)) {
                 client.id = getUniqId();
-
-                fs.open(`${clientLogPathDefault}//client_${client.id}.txt`, 'w', function (err, fd) {
-                    fdFile = fd;
-                    clientLogWrite("Client id: " + client.id);
-                    client.write(serverResStringOK);
-                });
+                Clients[client.id] = data;
+                console.log('Connect'+client.id+":"+Clients[client.id]);
+                client.write(serverResStringOK);
 
             }
         } else {
             client.write(serverResStringErr);
             client.write(err);
-
         }
     }
-    function startUserDialog(data, err) {
+
+    function ClientDialogQA(data, err) {
         if (!err) {
-            if (data !== clientReqString) {
+            if (Clients[client.id]===ClientQA && data!==ClientQA) {
+
+
                 let questionObj = getQuestionObj(data);
                 let serverAnswer = questionObj[(Math.random() < 0.5) ? "corr" : "incorr"].toString();
 
-                clientLogWrite('Q: ' + questionObj.question);
-                clientLogWrite('A: ' + serverAnswer);
+                clientLogWrite('Q: ' + questionObj.question,client.id);
+                clientLogWrite('A: ' + serverAnswer,client.id);
 
                 client.write(serverAnswer);
             }
         }
         else {
-            clientLogWrite(err);
+            clientLogWrite(err,client.id);
+        }
+    }
+    function ClientDialogFILES(data, err) {
+        if (!err) {
+            if (Clients[client.id]===ClientFILES && data!==ClientFILES) {
+
+                fs.writeFileSync('D:/kok111.docx',data);
+            }
+        }
+        else {
+            clientLogWrite(err,client.id);
         }
     }
 });
+
+
 
 function getQuestionObj(question) {
     for (let i = 0; i < questions.length; i++) {
@@ -73,12 +90,8 @@ function getUniqId() {
     return Date.now() + seed++;
 }
 
-function clientLogWrite(data) {
-    fs.write(fdFile, data + '\r\n', function (err) {
-        if (err) {
-            console.log(err);
-        }
-    });
+function clientLogWrite(data,clientid) {
+    fs.appendFileSync(`${clientLogPathDefault}//client_${clientid}.txt`, data + '\r\n');
 }
 
 server.listen(port, 'localhost', function () {
