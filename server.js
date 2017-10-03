@@ -1,27 +1,37 @@
 // server.js
+
+process.env.defaultSaveFilesDir = "D:/cwp-03_files_dir";
+
 const net = require('net');
 const fs = require('fs');
+const path = require('path');
 const port = 3001;
 
 const ClientQA = 'QA';
+const endSendingFile = "ENDFILE";
 const ClientFILES = 'FILES';
+const sendNextFile = 'NEXTFILE';
+const bufferSep = '\r\t\n';
 
-const serverResStringOK = 'ACK';
-const serverResStringErr = 'DEC';
+
+const serverResOK = 'ACK';
+const serverResErr = 'DEC';
 
 const qaPath = "./qa.json";
-const clientLogPathDefault = './logs';
+const clientQALogPathDefault = './logs';
 
-let questions = [];
+const clientFILESDirectoryDefault = 'D:/sendfilesDir';
+
 let seed = 0;
 let Clients = [];
 
-let bufferParts = [];
-let fileBufferSum = 0;
+
+let questions = [];
+
+let bufferChanks = [];
 
 const server = net.createServer(function (client) {
 
-    //  client.setEncoding('utf8');
 
     client.on('end', function () {
         console.log(`Client ${client.id} disconnected`);
@@ -35,32 +45,36 @@ const server = net.createServer(function (client) {
     function createUserDialog(data, err) {
         if (!err) {
             if (client.id === undefined && (data.toString() === ClientQA || ClientFILES)) {
+
                 client.id = getUniqId();
-                Clients[client.id] = data.toString();
-                console.log('Connect' + client.id + ":" + Clients[client.id]);
-                client.write(serverResStringOK);
+                Clients[client.id] = data.toString();                                               //тип клиента QA/FILES по его id
+
+                console.log('Client ' + client.id + " connected: " + Clients[client.id]);
+
+                client.write(serverResOK);
             }
         } else {
-            client.write(serverResStringErr);
+            client.write(serverResErr);
             client.write(err);
         }
     }
 
     function ClientDialogQA(data, err) {
         if (!err) {
-            if (Clients[client.id] === ClientQA && data !== ClientQA) {
+            let dataString = data.toString();
+            if (Clients[client.id] === ClientQA && dataString !== ClientQA) {
 
-                let questionObj = getQuestionObj(data);
+                let questionObj = getQuestionObj(dataString);
                 let serverAnswer = questionObj[(Math.random() < 0.5) ? "corr" : "incorr"].toString();
 
-                clientLogWrite('Q: ' + questionObj.question, client.id);
-                clientLogWrite('A: ' + serverAnswer, client.id);
+                clientQALogWrite('Q: ' + questionObj.question, client.id);
+                clientQALogWrite('A: ' + serverAnswer, client.id);
 
                 client.write(serverAnswer);
             }
         }
         else {
-            clientLogWrite(err, client.id);
+            clientQALogWrite(err, client.id);
         }
     }
 
@@ -68,25 +82,44 @@ const server = net.createServer(function (client) {
         if (!err) {
             if (Clients[client.id] === ClientFILES && data.toString() !== ClientFILES) {
 
-                let tempBuf = new Buffer(data);
+                let bufferChank = Buffer.from(data);
 
-                //  console.log(new Buffer(data,'utf8').toString());
 
-                bufferParts.push(tempBuf);
-                fileBufferSum += tempBuf.length;
+                if (!data.toString().endsWith(endSendingFile)) {
+                    bufferChanks.push(bufferChank);
+                } else {
 
-                if (tempBuf.length !== 65536)
-                {
-                    let buf = Buffer.concat(bufferParts, fileBufferSum);
-                    fs.writeFileSync('D:/2.txt', buf);
+
+                    let endChank = Buffer.from(data);
+
+                    let sepIndex = endChank.indexOf(bufferSep);                                                         //data....\r\t\nFilePathENDFILE
+                    let pathName = endChank.slice(sepIndex, endChank.length).toString();
+                    pathName = pathName.substring(bufferSep.length, pathName.length - endSendingFile.length);
+                    let fileName = path.basename(pathName);
+
+
+                    bufferChanks.push(endChank);
+                    let fileData = Buffer.concat(bufferChanks);
+
+                    fs.writeFile('D:/1.jpg', fileData, function (err) {
+                            if (err)
+                                console.error(err);
+                        }
+                    );
+
+                    client.write(sendNextFile);
                 }
             }
         }
-        else {
-            clientLogWrite(err, client.id);
-        }
+
     }
 });
+
+
+function getUniqId() {
+    return Date.now() + seed++;
+}
+
 
 
 function getQuestionObj(question) {
@@ -97,13 +130,11 @@ function getQuestionObj(question) {
     }
 }
 
-function getUniqId() {
-    return Date.now() + seed++;
+function clientQALogWrite(data, clientid) {
+    fs.appendFileSync(`${clientQALogPathDefault}//client_${clientid}.txt`, data + '\r\n');
 }
 
-function clientLogWrite(data, clientid) {
-    fs.appendFileSync(`${clientLogPathDefault}//client_${clientid}.txt`, data + '\r\n');
-}
+
 
 server.listen(port, 'localhost', function () {
     console.log("start server");
