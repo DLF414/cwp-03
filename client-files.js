@@ -58,14 +58,12 @@ function sendNextFile() {
 
         fs.readFile(tmpFileName, (err, data) => {
 
-            let buffertoSend = Buffer.from(data);
-
-            client.write(buffertoSend);
+            client.write(data);
             client.write(bufferSep + path.basename(tmpFileName));
-            client.write(endSendingFile);
+            client.write(bufferSep + endSendingFile);
 
         });
-    }else{
+    } else {
         client.end();
     }
 }
