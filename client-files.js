@@ -10,12 +10,11 @@ const OkServerStatus = 'ACK';
 const ErrServerStatus = 'DEC';
 const OkClientStatus = 'FILES';
 const nextFileStatus = 'NEXTFILE';
-const bufferSep = '\r\t\n';
+const bufferSep = '|||||';
 
 const connectionAddressObj = {host: "127.0.0.1", port: 3001};
 const client = new net.Socket();
 
-let directories = [];
 let allFiles = [];
 
 
@@ -23,39 +22,21 @@ client.setEncoding('utf8');
 
 client.connect(connectionAddressObj, (err) => {
 
-    if (err) {
-        console.error(err);
-    }
-    else {
-        directories = getDirectoriesFrom();
-        directories.forEach((dirVal) => {
-            readAllFilesNames(dirVal);
-        });
-        client.write(OkClientStatus);
+    if (err) throw err;
 
-    }
+    getDirectoriesFromCmd().forEach((dirVal) => {
+        readAllFilesNames(dirVal);
+    });
+    client.write(OkClientStatus);
+
 });
 
+client.on('error', (err) => {
+    console.error(err);
+});
 
-client.on('data', createSendingDialog);
 client.on('data', abortSendingDialog);
-
-function createSendingDialog(data) {
-    if (data === OkServerStatus || nextFileStatus) {
-        sendNextFile()
-    }
-}
-
-
-
-function sendNextFile(){
-    let tmpFileName = allFiles.shift();
-    let buffertoSend = Buffer.from(fs.readFileSync(tmpFileName));
-
-    client.write(buffertoSend);
-    client.write(bufferSep+tmpFileName);
-    client.write(endSendingFile);
-}
+client.on('data', createSendingDialog);
 
 function abortSendingDialog(data) {
     if (data === ErrServerStatus) {
@@ -64,6 +45,30 @@ function abortSendingDialog(data) {
     }
 }
 
+function createSendingDialog(data) {
+    if (data === OkServerStatus || nextFileStatus) {
+        sendNextFile()
+    }
+}
+
+function sendNextFile() {
+    if (allFiles.length !== 0) {
+
+        let tmpFileName = allFiles.shift();
+
+        fs.readFile(tmpFileName, (err, data) => {
+
+            let buffertoSend = Buffer.from(data);
+
+            client.write(buffertoSend);
+            client.write(bufferSep + path.basename(tmpFileName));
+            client.write(endSendingFile);
+
+        });
+    }else{
+        client.end();
+    }
+}
 
 function readAllFilesNames(dirVal) {
     fs.readdirSync(dirVal).forEach((fileVal) => {
@@ -78,6 +83,6 @@ function readAllFilesNames(dirVal) {
     })
 }
 
-function getDirectoriesFrom() {
+function getDirectoriesFromCmd() {
     return process.argv.slice(2);
 }

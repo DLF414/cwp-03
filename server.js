@@ -1,7 +1,4 @@
 // server.js
-
-process.env.defaultSaveFilesDir = "D:/cwp-03_files_dir";
-
 const net = require('net');
 const fs = require('fs');
 const path = require('path');
@@ -11,7 +8,7 @@ const ClientQA = 'QA';
 const endSendingFile = "ENDFILE";
 const ClientFILES = 'FILES';
 const sendNextFile = 'NEXTFILE';
-const bufferSep = '\r\t\n';
+const bufferSep = '|||||';
 
 
 const serverResOK = 'ACK';
@@ -19,8 +16,7 @@ const serverResErr = 'DEC';
 
 const qaPath = "./qa.json";
 const clientQALogPathDefault = './logs';
-
-const clientFILESDirectoryDefault = 'D:/sendfilesDir';
+const recvFilesDir = process.env.FILESDIR + path.sep + 'files';
 
 let seed = 0;
 let Clients = [];
@@ -28,12 +24,17 @@ let Clients = [];
 
 let questions = [];
 
-let bufferChanks = [];
+let bufferChanksArray = [];
+
 
 const server = net.createServer(function (client) {
 
 
     client.on('end', function () {
+        let i = Clients.indexOf(client.id);
+        if(i !== -1) {
+            Clients.splice(i, 1);
+        }
         console.log(`Client ${client.id} disconnected`);
     });
 
@@ -41,17 +42,17 @@ const server = net.createServer(function (client) {
     client.on('data', ClientDialogQA);
     client.on('data', ClientDialogFILES);
 
-
     function createUserDialog(data, err) {
         if (!err) {
             if (client.id === undefined && (data.toString() === ClientQA || ClientFILES)) {
 
                 client.id = getUniqId();
-                Clients[client.id] = data.toString();                                               //тип клиента QA/FILES по его id
+                Clients[client.id] = data.toString();
 
-                console.log('Client ' + client.id + " connected: " + Clients[client.id]);
 
                 client.write(serverResOK);
+                console.log('Client ' + client.id + " connected: " + Clients[client.id]);
+
             }
         } else {
             client.write(serverResErr);
@@ -82,39 +83,67 @@ const server = net.createServer(function (client) {
         if (!err) {
             if (Clients[client.id] === ClientFILES && data.toString() !== ClientFILES) {
 
+                let clientFilesDir = recvFilesDir+path.sep+client.id.toString();
+
+                createDirIfNotExist(clientFilesDir);
+
                 let bufferChank = Buffer.from(data);
 
 
                 if (!data.toString().endsWith(endSendingFile)) {
-                    bufferChanks.push(bufferChank);
+                    bufferChanksArray.push(bufferChank);
                 } else {
-
 
                     let endChank = Buffer.from(data);
 
-                    let sepIndex = endChank.indexOf(bufferSep);                                                         //data....\r\t\nFilePathENDFILE
-                    let pathName = endChank.slice(sepIndex, endChank.length).toString();
-                    pathName = pathName.substring(bufferSep.length, pathName.length - endSendingFile.length);
-                    let fileName = path.basename(pathName);
+                    let separatorIndex = endChank.indexOf(bufferSep);
+                    let pathName = endChank.slice(separatorIndex, endChank.length).toString();
+                    let fileName = pathName.substring(bufferSep.length, pathName.length - endSendingFile.length);
 
 
-                    bufferChanks.push(endChank);
-                    let fileData = Buffer.concat(bufferChanks);
+                    bufferChanksArray.push(endChank.slice(0, separatorIndex));
+                    let fileData = Buffer.concat(bufferChanksArray);
 
-                    fs.writeFile('D:/1.jpg', fileData, function (err) {
+                    fs.writeFile(clientFilesDir + path.sep + fileName, fileData, function (err) {
                             if (err)
                                 console.error(err);
                         }
                     );
 
+                    bufferChanksArray = [];
                     client.write(sendNextFile);
                 }
             }
         }
 
     }
+
 });
 
+server.listen(port, 'localhost', function () {
+    console.log("start server");
+
+    fs.readFile(qaPath, function (err, data) {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            questions = JSON.parse(data);
+            initDirs();
+        }
+    });
+});
+
+
+function initDirs() {
+    createDirIfNotExist(recvFilesDir);
+    createDirIfNotExist(clientQALogPathDefault);
+}
+
+function createDirIfNotExist(path){
+    if (!fs.existsSync(path))
+        fs.mkdirSync(path);
+}
 
 function getUniqId() {
     return Date.now() + seed++;
@@ -133,18 +162,3 @@ function getQuestionObj(question) {
 function clientQALogWrite(data, clientid) {
     fs.appendFileSync(`${clientQALogPathDefault}//client_${clientid}.txt`, data + '\r\n');
 }
-
-
-
-server.listen(port, 'localhost', function () {
-    console.log("start server");
-
-    fs.readFile(qaPath, function (err, data) {
-        if (err) {
-            console.log(err);
-        }
-        else {
-            questions = JSON.parse(data);
-        }
-    });
-});
