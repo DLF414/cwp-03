@@ -13,12 +13,10 @@ const client = new net.Socket();
 client.setEncoding('utf8');
 
 client.connect(connectionAddressObj, function (err) {
-    if (err)
-    {
+    if (err) {
         console.error(err);
     }
-    else
-    {
+    else {
         client.write(OkClientStatus);
     }
 });
@@ -26,19 +24,15 @@ client.connect(connectionAddressObj, function (err) {
 
 client.on('data', function (data) {
     if (data === OkServerStatus) {
-        console.log(OkServerStatus);
-        fs.open('D:\kok.docx','r',function(status,fc){
-            if(status){
-                console.log(status);
-            }
-            else{
-                console.log('+2');
-
-                let buffer = new Buffer(1000);
-                fs.read(fd,buffer,0,1000,0,function(err,num){
-                    client.write(buffer);
-                })
-            }
+        fs.readFile('D:/1.txt', function (err, data) {
+            let buffer = Buffer.from(data);
+            console.log(buffer);
+            console.log(buffer.length);
+            client.write(buffer);
+             fs.writeFile('D:/2.png',new Buffer(data),function(){});
+             let buffer = Buffer.allocUnsafe();
+             buffer.writeDoubleBE(data);
+             client.write(buffer);
         })
     }
     else if (data === ErrServerStatus) {
@@ -47,16 +41,6 @@ client.on('data', function (data) {
 
     }
     else if (data !== OkServerStatus) {
-        console.log("\nQuestion: " + questions[currentQuestionIndex].question);
-        console.log("Server answer: " + data);
-        console.log(data === questions[currentQuestionIndex].corr.toString() ?
-            "Server answer is true" :
-            "True answer: " + questions[currentQuestionIndex].corr);
-        if (++currentQuestionIndex !== questions.length) {
-            client.write(questions[currentQuestionIndex].question)
-        }
-        else {
-            client.destroy();
-        }
+
     }
 });
